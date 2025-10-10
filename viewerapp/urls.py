@@ -1,9 +1,7 @@
 from django.urls import path
-from .views import aps_token, viewer_page
+from .views import login_page, viewer_page 
 
 urlpatterns = [
-    path('api/token', aps_token, name='get_token'),
-    path('api/auth/token', aps_token, name='token_old'),  # alias
-    path('', viewer_page, name='home'),
+    path("login/", login_page, name="login_page"),
+    path("viewer/", viewer_page, name="viewer_page"),
 ]
-

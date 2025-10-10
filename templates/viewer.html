@@ -1,45 +1,81 @@
+{% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
-  <meta charset='utf-8'>
-  <title>Autodesk APS Viewer</title>
-  <script src='https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.js'></script>
-  <link rel='stylesheet' href='https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css'>
-  <style>
-    html, body { height: 100%; margin: 0; }
-    #viewer { height: 100%; width: 100%; }
-  </style>
+  <meta charset="UTF-8" />
+  <title>Digital Twin | Viewer</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin=""></script>
+
+  <!-- APS Viewer -->
+  <link rel="stylesheet"
+        href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css" />
+  <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
+
+  <!-- Nosso CSS -->
+  <link rel="stylesheet" href="{% static 'css/viewer.css' %}">
 </head>
 <body>
-  <div id='viewer'></div>
-  <script>
-  // 1) Defina a constante ANTES de usar
-  const TOKEN_URL = "{% url 'get_token' %}"; // -> /api/token
-  console.log('TOKEN_URL =>', TOKEN_URL);
+  <div class="shell">
+    <header>
+      <div class="logo"><img src="{% static 'img/digital-twin-assist.png' %}">Digital Twin Assist</div>
+      <div class="search"><input id="q" placeholder="Buscar ativo ou sensor…" /></div>
+      <div class="user" id="who">Carregando…</div>
+    </header>
 
-  const URN = "{{ APS_URN }}";
+    <aside>
+      <div class="sicon active" title="Mapa">🗺️</div>
+      <div class="sicon" title="Eventos">🔔</div>
+      <div class="sicon" title="Relatórios">📊</div>
+      <div class="sicon" title="KPI">🏷️</div>
+      <div class="sicon" title="Sair" id="logout">⎋</div>
+    </aside>
 
-  async function getToken() {
-    const r = await fetch(TOKEN_URL);
-    if (!r.ok) throw new Error('Token endpoint error ' + r.status);
-    return r.json();
-  }
+    <section class="center"><div id="map"></div></section>
 
-  Autodesk.Viewing.Initializer({
-    env: 'AutodeskProduction',
-    getAccessToken: async (onTokenReady) => {
-      const t = await getToken();
-      onTokenReady(t.access_token, t.expires_in || 3599);
-    }
-  }, () => {
-    const viewer = new Autodesk.Viewing.GuiViewer3D(document.getElementById('viewer'));
-    viewer.start();
-    Autodesk.Viewing.Document.load('urn:' + URN, (doc) => {
-      const def = doc.getRoot().getDefaultGeometry();
-      viewer.loadDocumentNode(doc, def);
-    }, (err) => console.error('Erro ao carregar documento:', err));
-  });
-</script>
+    <section class="right">
+      <div class="r-head">
+        <h3 id="p-title">Selecione uma planta no mapa</h3>
+        <div class="muted" id="p-sub">Cliente • Setor • Planta</div>
+      </div>
 
+      <div class="stats">
+        <div class="stat"><small>Ativos</small><b id="k-ativos">—</b></div>
+        <div class="stat"><small>Sensores</small><b id="k-sensores">—</b></div>
+        <div class="stat"><small>Gateways</small><b id="k-gw">—</b></div>
+      </div>
+
+      <div class="events">
+        <div class="muted" style="margin:6px 0 4px">Eventos recentes</div>
+        <div class="muted" style="margin:10px 0 4px">Tempo real (MQTT)</div>
+<div id="mqtt-list" class="events"></div>
+        <div id="events-list">
+          <div class="event"><span class="dot warn"></span><div>Sem eventos carregados (demo).</div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Overlay do APS Viewer -->
+  <div id="aps-overlay">
+    <div id="aps-wrap">
+      <div id="aps-top">
+        <strong>APS Viewer</strong>
+        <button id="aps-close">Fechar</button>
+      </div>
+      <div id="aps-viewer"></div>
+    </div>
+  </div>
+
+  <!-- Nosso JS -->
+  <script src="{% static 'js/viewer.js' %}"></script>
 </body>
 </html>

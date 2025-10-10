@@ -38,3 +38,9 @@ def aps_token(request):
 
 def viewer_page(request):
     return render(request, "viewer.html", {"APS_URN": APS_URN})
+
+def login_page(request):
+    return render(request, "login.html")
+
+def viewer_page(request):
+    return render(request, "viewer.html")

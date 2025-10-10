@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 import os
 import sys
+from dotenv import load_dotenv
 
 def main():
+    load_dotenv()  # <-- VERIFIQUE SE ESTA LINHA EXISTE
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'viewer_project.settings')
     try:
         from django.core.management import execute_from_command_line
