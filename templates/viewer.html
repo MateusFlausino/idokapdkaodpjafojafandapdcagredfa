@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <title>Autodesk APS Viewer</title>
+  <script src='https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.js'></script>
+  <link rel='stylesheet' href='https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css'>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #viewer { height: 100%; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id='viewer'></div>
+  <script>
+  // 1) Defina a constante ANTES de usar
+  const TOKEN_URL = "{% url 'get_token' %}"; // -> /api/token
+  console.log('TOKEN_URL =>', TOKEN_URL);
+
+  const URN = "{{ APS_URN }}";
+
+  async function getToken() {
+    const r = await fetch(TOKEN_URL);
+    if (!r.ok) throw new Error('Token endpoint error ' + r.status);
+    return r.json();
+  }
+
+  Autodesk.Viewing.Initializer({
+    env: 'AutodeskProduction',
+    getAccessToken: async (onTokenReady) => {
+      const t = await getToken();
+      onTokenReady(t.access_token, t.expires_in || 3599);
+    }
+  }, () => {
+    const viewer = new Autodesk.Viewing.GuiViewer3D(document.getElementById('viewer'));
+    viewer.start();
+    Autodesk.Viewing.Document.load('urn:' + URN, (doc) => {
+      const def = doc.getRoot().getDefaultGeometry();
+      viewer.loadDocumentNode(doc, def);
+    }, (err) => console.error('Erro ao carregar documento:', err));
+  });
+</script>
+
+</body>
+</html>
