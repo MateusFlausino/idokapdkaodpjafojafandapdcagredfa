@@ -1,39 +1,44 @@
-import os, time, requests
+# viewer_project/core/views_aps.py
+import os, requests, logging
 from django.http import JsonResponse
-from django.views.decorators.http import require_GET
+from django.conf import settings
 
-APS_OAUTH_URL = "https://developer.api.autodesk.com/authentication/v2/token"
+logger = logging.getLogger(__name__)
 
-# cache simples em memória
-_TOKEN_CACHE = {"token": None, "exp": 0}  # epoch seconds
+APS_TOKEN_URL = "https://developer.api.autodesk.com/authentication/v2/token"
+APS_DEFAULT_SCOPE = "data:read viewables:read"
 
-def _env(var):
-    v = os.getenv(var)
-    return v.strip() if v else v
-
-@require_GET
 def aps_token(request):
-    cid  = _env("APS_CLIENT_ID")
-    csec = _env("APS_CLIENT_SECRET")
-    if not cid or not csec:
-        return JsonResponse({"error": "APS credentials missing"}, status=500)
+    """
+    Retorna {access_token, expires_in} do APS (OAuth client_credentials).
+    Usa credenciais de settings ou variáveis de ambiente.
+    """
+    client_id = getattr(settings, "APS_CLIENT_ID", None) or os.getenv("APS_CLIENT_ID")
+    client_secret = getattr(settings, "APS_CLIENT_SECRET", None) or os.getenv("APS_CLIENT_SECRET")
+    scope = getattr(settings, "APS_SCOPE", APS_DEFAULT_SCOPE)
 
-    # se ainda válido, devolve do cache
-    now = int(time.time())
-    if _TOKEN_CACHE["token"] and _TOKEN_CACHE["exp"] - now > 60:
-        return JsonResponse({"access_token": _TOKEN_CACHE["token"], "expires_in": _TOKEN_CACHE["exp"] - now})
+    if not client_id or not client_secret:
+        msg = "APS_CLIENT_ID/APS_CLIENT_SECRET não configurados."
+        logger.error(msg)
+        return JsonResponse({"error": msg}, status=500)
 
-    data = {"grant_type": "client_credentials", "scope": "viewables:read"}
     try:
-        resp = requests.post(APS_OAUTH_URL, data=data, auth=(cid, csec), timeout=10)
+        r = requests.post(
+            APS_TOKEN_URL,
+            data={
+                "grant_type": "client_credentials",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "scope": scope,
+            },
+            timeout=10,
+        )
+        if not r.ok:
+            logger.error("APS token HTTP %s: %s", r.status_code, r.text)
+            return JsonResponse({"error": "APS auth falhou", "detail": r.text}, status=502)
+
+        j = r.json()
+        return JsonResponse({"access_token": j["access_token"], "expires_in": j["expires_in"]})
     except requests.RequestException as e:
-        return JsonResponse({"error": "APS request error", "detail": str(e)}, status=502)
-
-    if not resp.ok:
-        # devolve mensagem do APS p/ debug
-        return JsonResponse({"error": "APS auth failed", "detail": resp.text}, status=resp.status_code)
-
-    j = resp.json()
-    _TOKEN_CACHE["token"] = j.get("access_token")
-    _TOKEN_CACHE["exp"]   = now + int(j.get("expires_in", 0))
-    return JsonResponse({"access_token": _TOKEN_CACHE["token"], "expires_in": _TOKEN_CACHE["exp"] - now})
+        logger.exception("Erro de rede ao pedir token APS")
+        return JsonResponse({"error": "Erro de rede ao pedir token APS"}, status=502)

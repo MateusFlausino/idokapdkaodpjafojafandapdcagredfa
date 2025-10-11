@@ -26,12 +26,21 @@ class UserProfile(models.Model):
     def __str__(self):
         return f"{self.user.username} ({self.role})"
 
+# --- NOVO: modelo de Tag
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    color = models.CharField(max_length=7, default="#0ea5e9")  # hex, ex: #FF0000
+    icon = models.CharField(max_length=50, blank=True, default="")  # opcional
+    def __str__(self):
+        return self.name
 
+    
 class Plant(models.Model):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="plants")
     name = models.CharField(max_length=150)
     latitude = models.FloatField()
     longitude = models.FloatField()
+    tags = models.ManyToManyField('Tag', blank=True, related_name='plants')
     aps_urn = models.CharField(max_length=255, blank=True, null=True)
     address = models.CharField(max_length=255, blank=True, default="")
     is_active = models.BooleanField(default=True)

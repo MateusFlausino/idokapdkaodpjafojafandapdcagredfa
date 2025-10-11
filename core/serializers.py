@@ -1,31 +1,40 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
-from .models import Client, Plant, UserProfile
+from .models import Plant, Client, Tag
+
+class TagSerializer(serializers.ModelSerializer):
+  class Meta:
+    model = Tag
+    fields = ("id", "name", "color", "icon")
 
 class ClientSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Client
-        fields = ["id", "name", "slug", "notes", "created_at"]
+  class Meta:
+    model = Client
+    fields = ("id", "name")
 
 class PlantSerializer(serializers.ModelSerializer):
-    client_name = serializers.CharField(source="client.name", read_only=True)
+  latitude  = serializers.SerializerMethodField()
+  longitude = serializers.SerializerMethodField()
+  tags = TagSerializer(many=True, read_only=True)
 
-    class Meta:
-        model = Plant
-        fields = [
-            "id", "client", "client_name", "name",
-            "latitude", "longitude", "aps_urn", "address",
-            "is_active", "created_at"
-        ]
+  class Meta:
+    model = Plant
+    fields = ("id", "name", "client", "latitude", "longitude", "aps_urn", "address", "is_active", "tags")
 
-class MeSerializer(serializers.ModelSerializer):
-    role = serializers.CharField(source="profile.role", read_only=True)
-    client = serializers.SerializerMethodField()
+  def _to_float(self, v):
+    if v is None:
+      return None
+    s = str(v).strip().replace(",", ".")
+    try:
+      return float(s)
+    except Exception:
+      return None
 
-    class Meta:
-        model = User
-        fields = ["id", "username", "email", "first_name", "last_name", "role", "client"]
+  def get_latitude(self, obj):
+    return self._to_float(obj.latitude)
 
-    def get_client(self, obj):
-        p = getattr(obj, "profile", None)
-        return {"id": p.client_id, "name": p.client.name} if (p and p.client) else None
+  def get_longitude(self, obj):
+    return self._to_float(obj.longitude)
+
+class MeSerializer(serializers.Serializer):
+  username = serializers.CharField()
+  user = serializers.CharField(source="username")
