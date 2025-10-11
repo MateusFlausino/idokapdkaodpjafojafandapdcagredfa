@@ -46,3 +46,8 @@ class PlantViewSet(viewsets.ModelViewSet):
 @decorators.api_view(["GET"])
 def me(request):
     return response.Response(MeSerializer(request.user).data)
+from django.shortcuts import render
+
+def viewer(request):
+    """Renderiza a página principal do mapa com os pinos das plantas"""
+    return render(request, "viewer.html")

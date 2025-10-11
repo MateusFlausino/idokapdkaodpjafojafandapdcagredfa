@@ -18,8 +18,11 @@ def _build_maps():
         for item in cfg.topics:
             t = (item.get("topic") or "").strip()
             lbl = (item.get("label") or t).strip()
+            fld = (item.get("field") or None)
             if t:
-                TOPIC_MAP[t] = (cfg.plant_id, lbl)
+                # topic -> (plant_id, label, field)
+                TOPIC_MAP[t] = (cfg.plant_id, lbl, fld)
+
 
 def _on_connect(client, userdata, flags, rc, properties=None):
     # Inscreve-se apenas nos tópicos mapeados
@@ -28,22 +31,43 @@ def _on_connect(client, userdata, flags, rc, properties=None):
 
 def _on_message(client, userdata, msg):
     topic = msg.topic
-    payload = msg.payload.decode(errors="ignore")
-    plant_id, label = TOPIC_MAP.get(topic, (None, None))
-    if plant_id is None:
+    payload_raw = msg.payload.decode(errors="ignore")
+    mapping = TOPIC_MAP.get(topic)
+    if not mapping:
         return
-    # tenta float; se falhar guarda texto
-    try:
-        val = float(payload)
-    except Exception:
-        try:
-            val = json.loads(payload)
-        except Exception:
-            val = payload
 
-    data = PLANT_DATA.setdefault(plant_id, {"values": {}, "ts": 0})
-    data["values"][label] = val
-    data["ts"] = int(time.time())
+    plant_id, label, field = mapping  # agora TOPIC_MAP guarda também field (pode ser None)
+
+    val = None
+    # 1) tenta número direto
+    try:
+        val = float(payload_raw)
+    except Exception:
+        # 2) tenta JSON + extração de campo
+        try:
+            data = json.loads(payload_raw)
+            if field:
+                # navega no dict por "ENERGY.Voltage"
+                cur = data
+                for part in field.split("."):
+                    if isinstance(cur, dict) and part in cur:
+                        cur = cur[part]
+                    else:
+                        cur = None
+                        break
+                val = cur
+            else:
+                val = data
+        except Exception:
+            val = payload_raw  # mantém string se nada deu
+
+    if val is None:
+        return
+
+    entry = PLANT_DATA.get(plant_id) or {"values": {}, "ts": 0}
+    entry["values"][label] = val
+    entry["ts"] = int(time.time())
+    PLANT_DATA[plant_id] = entry
 
 def _start_for_config(cfg: MqttConfig):
     client = mqtt.Client(client_id=cfg.client_id or mqtt.base62(uuid=None))

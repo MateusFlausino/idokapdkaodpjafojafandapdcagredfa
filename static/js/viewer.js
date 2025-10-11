@@ -15,9 +15,9 @@ document.getElementById("logout").onclick = () => {
 };
 
 // --- Mapa Leaflet ---
-const map = L.map('map',{zoomControl:true}).setView([-23.55,-46.63], 12);
+const map = L.map('map',{zoomControl:true}).setView([-23.55,-46.63], 10);
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 20, attribution: '© OpenStreetMap'
+  maxZoom: 19, attribution: '© OpenStreetMap'
 }).addTo(map);
 
 const tagClasses = ["tag-yellow","tag-green","tag-red","tag-blue"];
@@ -44,6 +44,34 @@ async function getApsToken(){
   const j = await r.json();
   return { access_token: j.access_token, expires_in: j.expires_in };
 }
+
+function startMqttPolling(plant) {
+  const access = localStorage.getItem('access');
+  if (!access || !plant?.id) return;
+
+  const url = `/api/plants/${plant.id}/mqtt/latest/`;
+  const headers = { Authorization: `Bearer ${access}` };
+
+  const render = (data) => {
+    // TODO: atualize aqui a caixinha “Tempo real (MQTT)”
+    // exemplo: document.querySelector('#mqtt-box').textContent = JSON.stringify(data.values);
+  };
+
+  const tick = () => {
+    fetch(url, { headers })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(render)
+      .catch(err => console.error('MQTT latest error:', err));
+  };
+
+  tick(); // chama já na primeira vez
+  if (window._mqttTimer) clearInterval(window._mqttTimer);
+  window._mqttTimer = setInterval(tick, 2000);
+}
+
+// Depois que renderizar os dados da planta no card/detalhe:
+renderPlant(plant);
+startMqttPolling(plant);
 
 async function openApsViewer(urn){
   if (!urn){ alert("Esta planta não possui APS URN configurada."); return; }

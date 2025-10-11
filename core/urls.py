@@ -1,17 +1,15 @@
-from django.urls import path, include
+from django.urls import path
 from rest_framework.routers import DefaultRouter
-from .views_mqtt import PlantMqttLatest, PlantMqttStream
-from .views import ClientViewSet, PlantViewSet, me
-from .views_aps import aps_token
+from . import views
+from . import views_mqtt
 
+# Cria o router do DRF
 router = DefaultRouter()
-router.register(r"clients", ClientViewSet, basename="client")
-router.register(r"plants", PlantViewSet, basename="plant")
+router.register(r'clients', views.ClientViewSet, basename='client')
+router.register(r'plants', views.PlantViewSet, basename='plant')
 
-urlpatterns = [
-    path("me/", me),
-    path("aps/token/", aps_token),   # ← ESTA ROTA
-    path("", include(router.urls)),
-    path("plants/<int:plant_id>/mqtt/latest/", PlantMqttLatest.as_view()),
-    path("plants/<int:plant_id>/mqtt/stream/", PlantMqttStream.as_view()),
+# Inclui as rotas automáticas dos ViewSets + rota MQTT
+urlpatterns = router.urls + [
+    path("plants/<int:pk>/mqtt/latest/", views_mqtt.latest, name="mqtt-latest"),
+    path("me/", views.me, name="me"),
 ]

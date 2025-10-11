@@ -1,18 +1,20 @@
+# core/apps.py
 from django.apps import AppConfig
-import os
+import logging
 
 class CoreConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "core"
 
     def ready(self):
-        # Evita duplicar threads no autoreload
-        if os.environ.get("RUN_MAIN") != "true":
-            return
+        from django.core.signals import request_started
         from .mqtt_runtime import start_all_clients
-        try:
-            start_all_clients()
-        except Exception as e:
-            # Loga mas não derruba o servidor
-            import logging
-            logging.getLogger(__name__).exception("Falha ao iniciar MQTT: %s", e)
+
+        def _lazy_start(*args, **kwargs):
+            try:
+                start_all_clients()
+            except Exception:
+                logging.getLogger(__name__).exception("Falha ao iniciar MQTT")
+
+        # inicia uma vez, no primeiro request
+        request_started.connect(_lazy_start, dispatch_uid="core.mqtt.lazy.start")

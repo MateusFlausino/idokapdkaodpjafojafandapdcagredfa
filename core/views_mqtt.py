@@ -28,3 +28,7 @@ class PlantMqttStream(APIView):
         resp["Cache-Control"] = "no-cache"
         resp["X-Accel-Buffering"] = "no"
         return resp
+    
+def latest(request, pk: int):
+    data = PLANT_DATA.get(pk) or {"values": {}, "ts": 0}
+    return JsonResponse(data)
