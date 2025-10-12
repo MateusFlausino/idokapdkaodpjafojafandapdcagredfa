@@ -31,14 +31,13 @@
       <div class="user" id="who">Carregando…</div>
     </header>
 
-  <aside>
-  <div class="sicon active" title="Mapa">🗺️</div>
-  <div class="sicon" title="Eventos">🔔</div>
-  <div class="sicon disabled" id="btn-grafana" title="Relatórios (Grafana)">📊</div>
-  <div class="sicon" title="KPI">🏷️</div>
-  <div class="sicon" title="Sair" id="logout">⎋</div>
-  </aside>
-
+    <aside>
+      <div class="sicon active" title="Mapa">🗺️</div>
+      <div class="sicon" title="Eventos">🔔</div>
+      <div class="sicon" title="Relatórios">📊</div>
+      <div class="sicon" title="KPI">🏷️</div>
+      <div class="sicon" title="Sair" id="logout">⎋</div>
+    </aside>
 
     <section class="center"><div id="map"></div></section>
 
@@ -58,7 +57,9 @@
         <div class="muted" style="margin:6px 0 4px">Eventos recentes</div>
         <div class="muted" style="margin:10px 0 4px">Tempo real (MQTT)</div>
 <div id="mqtt-list" class="events"></div>
-        <div id="events-list"></div>
+        <div id="events-list">
+          <div class="event"><span class="dot warn"></span><div>Sem eventos carregados (demo).</div></div>
+        </div>
       </div>
     </section>
   </div>

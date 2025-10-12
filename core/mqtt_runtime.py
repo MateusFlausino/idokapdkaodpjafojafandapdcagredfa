@@ -1,243 +1,121 @@
-# viewer_project/core/mqtt_runtime.py
-from __future__ import annotations
-
-import json
+import json, threading, time
+from typing import Dict, Tuple
 import logging
-import time
-from typing import Dict, Any
+import paho.mqtt.client as mqtt
 
-from django.db import connection, OperationalError, ProgrammingError
+from .models import MqttConfig
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
+)
 logger = logging.getLogger(__name__)
 
-# Cache em memória lido pelos endpoints/JS
-# Estrutura: { plant_id: {"values": {label: value, ...}, "ts": epoch_seconds } }
-PLANT_DATA: Dict[int, Dict[str, Any]] = {}
+# Estado em memória
+PLANT_DATA: Dict[int, dict] = {}   # {plant_id: {"values": {...}, "ts": epoch}}
+TOPIC_MAP: Dict[str, Tuple[int, str, str]] = {}  # topic -> (plant_id, label, field)
 
-_clients = []  # handlers dos clientes MQTT já conectados
+_start_lock = threading.Lock()
+_clients_started = False
 
-
-# ---------- helpers de DB e parse ----------
-
-def _db_ready() -> bool:
-    """Retorna True se as tabelas do app 'core' já existem (útil durante migrações)."""
+def _to_number(val):
+    if val is None:
+        return None
+    s = str(val).strip().replace(",", ".")
     try:
-        return 'core_plant' in connection.introspection.table_names()
+        return float(s)
     except Exception:
-        return False
+        return None
 
+def _on_connect(client, userdata, flags, rc):
+    cfg = userdata.get("cfg")
+    if rc == 0:
+        logger.info(f"✅ Conectado ao broker MQTT: {cfg.broker}:{cfg.port}")
+        for t in (cfg.topics or []):
+            logger.info(f"   ↳ Assinando tópico: {t.get('topic')}")
+    else:
+        logger.error(f"❌ Falha ao conectar ao broker MQTT (rc={rc})")
 
-def _safe_get_mqtt_configs():
-    """
-    Carrega configs do banco somente quando possível.
-    Deve retornar um queryset/iterável de MqttConfig.
-    """
-    try:
-        from .models import MqttConfig  # import adiado
-        # Se o modelo tiver flag 'enabled', filtre; senão, remova o filter.
+def _on_message(client, userdata, msg):
+    topic = msg.topic
+    payload_raw = msg.payload.decode(errors="ignore")
+    logger.info(f"📩 {topic} → {payload_raw}")
+
+    mapping = TOPIC_MAP.get(topic)
+    if not mapping:
+        return
+
+    plant_id, label, field = mapping
+    val = None
+
+    # tenta número direto
+    n = _to_number(payload_raw)
+    if n is not None:
+        val = n
+    else:
+        # tenta JSON e extrair field (ex.: ENERGY.Voltage)
         try:
-            qs = MqttConfig.objects.select_related("plant").all()
-        except Exception:
-            qs = MqttConfig.objects.all()
-        return qs
-    except (OperationalError, ProgrammingError) as e:
-        logger.warning("DB ainda não pronto p/ MQTT: %s", e)
-        return []
-    except Exception:
-        logger.exception("Erro carregando MqttConfig")
-        return []
-
-
-def _topics_map(cfg) -> Dict[str, str]:
-    """
-    Tenta montar um dict {topic: label} a partir do campo JSON de tópicos da sua MqttConfig.
-    Aceita formatos:
-      - lista de objetos: [{"topic":"cmnd/.../POWER1","label":"Disparo na Fase A"}, ...]
-      - dict simples: {"cmnd/.../POWER1": "Disparo na Fase A", ...}
-    """
-    raw = getattr(cfg, "topics", None) or getattr(cfg, "topics_json", None) or "[]"
-    try:
-        data = json.loads(raw)
-    except Exception:
-        return {}
-
-    mapping = {}
-    if isinstance(data, dict):
-        for t, lb in data.items():
-            if t and lb:
-                mapping[str(t)] = str(lb)
-    elif isinstance(data, list):
-        for item in data:
-            if not isinstance(item, dict):
-                continue
-            t = item.get("topic") or item.get("name") or item.get("t") or ""
-            lb = item.get("label") or item.get("alias") or item.get("l") or t
-            if t:
-                mapping[str(t)] = str(lb)
-    return mapping
-
-
-def _coerce_value(payload_bytes: bytes) -> Any:
-    """
-    Converte o payload para um valor útil:
-      - JSON → mantém (se for simples)
-      - "ON"/"OFF"/"TRUE"/"FALSE"/"1"/"0" → 1/0
-      - número string → float
-      - fallback: string
-    """
-    s = payload_bytes.decode("utf-8", errors="ignore").strip()
-
-    # Tenta JSON
-    if s.startswith("{") or s.startswith("["):
-        try:
-            return json.loads(s)
-        except Exception:
-            pass
-
-    up = s.upper()
-    if up in ("ON", "TRUE"):
-        return 1
-    if up in ("OFF", "FALSE"):
-        return 0
-
-    # número
-    try:
-        return float(s.replace(",", "."))
-    except Exception:
-        pass
-
-    return s
-
-
-def _update_latest(plant_id: int, kv: Dict[str, Any], ts: float) -> None:
-    slot = PLANT_DATA.setdefault(plant_id, {"values": {}, "ts": 0})
-    try:
-        slot["values"].update(kv)
-    except Exception:
-        slot["values"] = dict(kv)
-    slot["ts"] = int(ts)
-
-
-
-# ... imports e PLANT_DATA como já está ...
-
-def _on_message_factory(plant_id: int, topic_map: Dict[str, str]):
-    def _on_message(client, userdata, msg):
-        try:
-            # garanta plant_id a partir do userdata (fallback)
-            pid = plant_id or (userdata or {}).get("plant_id")
-            if not pid:
-                logger.warning("Mensagem sem plant_id. topic=%s", msg.topic)
-                return
-
-            val = _coerce_value(msg.payload)
-
-            kv = {}
-            if isinstance(val, dict):
-                for subk, subv in val.items():
-                    label = topic_map.get(f"{msg.topic}/{subk}") or str(subk)
-                    kv[label] = subv
+            data = json.loads(payload_raw)
+            cur = data
+            if field:
+                for part in field.split("."):
+                    if isinstance(cur, dict) and part in cur:
+                        cur = cur[part]
+                    else:
+                        cur = None
+                        break
+                if cur is not None:
+                    n2 = _to_number(cur)
+                    val = n2 if n2 is not None else cur
             else:
-                label = topic_map.get(msg.topic) or msg.topic
-                kv[label] = val
-
-            if kv:
-                _update_latest(int(pid), kv, time.time())
-                logger.info("MQTT <- plant=%s topic=%s kv=%s", pid, msg.topic, kv)
+                val = data
         except Exception:
-            logger.exception("Falha no on_message (topic=%s)", msg.topic)
-    return _on_message
+            val = payload_raw
 
-
-def _start_one_client(cfg):
-    try:
-        import paho.mqtt.client as mqtt
-    except Exception:
-        logger.error("paho-mqtt não instalado. pip install paho-mqtt")
-        return None
-
-    topic_map = _topics_map(cfg)
-    topics = list(topic_map.keys())
-    if not topics:
-        logger.warning("MqttConfig id=%s sem tópicos válidos", getattr(cfg, "id", "?"))
-        return None
-
-    client_id = f"twin_{getattr(cfg, 'id', int(time.time()))}"
-    # 👉 paho v1 e v2: preferir setar userdata explicitamente
-    client = mqtt.Client(client_id=client_id)
-    client.user_data_set({"plant_id": cfg.plant_id})
-
-    user = getattr(cfg, "username", None) or getattr(cfg, "user", None)
-    pwd  = getattr(cfg, "password", None) or getattr(cfg, "passw", None)
-    if user:
-        client.username_pw_set(user, pwd or "")
-
-    client.on_message = _on_message_factory(cfg.plant_id, topic_map)
-
-    host = getattr(cfg, "host", None) or getattr(cfg, "server", None) or "localhost"
-    port = int(getattr(cfg, "port", 1883) or 1883)
-    keepalive = int(getattr(cfg, "keepalive", 30) or 30)
-
-    try:
-        # reconexão gradual (evita cair)
-        try:
-            client.reconnect_delay_set(min_delay=1, max_delay=60)
-        except Exception:
-            pass
-        client.connect(host, port, keepalive)
-    except Exception:
-        logger.exception("Falha conectando no broker MQTT (%s:%s)", host, port)
-        return None
-
-    for t in topics:
-        try:
-            client.subscribe(t, qos=0)
-        except Exception:
-            logger.exception("Falha ao assinar tópico %s (cfg id=%s)", t, getattr(cfg, "id", "?"))
-
-    try:
-        client.loop_start()
-    except Exception:
-        logger.exception("Falha no loop_start do cliente MQTT")
-        return None
-
-    logger.info("MQTT conectado (plant_id=%s, cfg_id=%s, host=%s, topics=%d)",
-                cfg.plant_id, getattr(cfg, "id", "?"), host, len(topics))
-    return client
-
-
-
-def start_all_clients() -> None:
-    if not _db_ready():
-        logger.warning("DB não pronto (skip start_all_clients)")
+    if val is None:
         return
 
-    cfgs = _safe_get_mqtt_configs()
-    if not cfgs:
-        logger.warning("Nenhuma MqttConfig encontrada (ou DB indisponível).")
-        return
+    entry = PLANT_DATA.get(plant_id) or {"values": {}, "ts": 0}
+    entry["values"][label] = val
+    entry["ts"] = int(time.time())
+    PLANT_DATA[plant_id] = entry
+    logger.info(f"🧩 Atualizando PLANT_DATA: plant_id={plant_id} label={label} val={val}")
 
-    for cfg in cfgs:
-        try:
-            c = _start_one_client(cfg)
-            if c:
-                _clients.append(c)
-        except Exception:
-            logger.exception("Falha iniciando cliente (cfg id=%s)", getattr(cfg, "id", "?"))
+def _build_maps():
+    TOPIC_MAP.clear()
+    for cfg in MqttConfig.objects.select_related("plant").all():
+        for item in (cfg.topics or []):
+            t = (item.get("topic") or "").strip()
+            lbl = (item.get("label") or t).strip()
+            fld = item.get("field") or None
+            if t:
+                TOPIC_MAP[t] = (cfg.plant_id, lbl, fld)
 
+def _start_one(cfg: MqttConfig):
+    client = mqtt.Client()
+    client.user_data_set({"cfg": cfg})
+    client.on_connect = _on_connect
+    client.on_message = _on_message
+    if cfg.username:
+        client.username_pw_set(cfg.username, cfg.password or None)
+    client.connect(cfg.broker, cfg.port or 1883, keepalive=60)
+    for item in (cfg.topics or []):
+        t = (item.get("topic") or "").strip()
+        if t:
+            client.subscribe(t)
+    client.loop_start()
 
-def stop_all_clients() -> None:
-    """Encerra clientes MQTT com segurança."""
-    for c in list(_clients):
-        try:
-            c.loop_stop()
-        except Exception:
-            pass
-        try:
-            c.disconnect()
-        except Exception:
-            pass
-        try:
-            _clients.remove(c)
-        except Exception:
-            pass
+def start_all_clients():
+    global _clients_started
+    with _start_lock:
+        if _clients_started:
+            return
+        for cfg in MqttConfig.objects.select_related("plant").all():
+            try:
+                _start_one(cfg)
+            except Exception:
+                logger.exception(f"Falha ao iniciar cliente MQTT para plant_id={cfg.plant_id}")
+        _build_maps()
+        _clients_started = True
+        logger.info("🚀 Inicialização MQTT concluída — todos os clientes foram iniciados.")

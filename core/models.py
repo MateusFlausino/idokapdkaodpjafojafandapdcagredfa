@@ -45,7 +45,6 @@ class Plant(models.Model):
     address = models.CharField(max_length=255, blank=True, default="")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    grafana_uid = models.CharField(max_length=50, blank=True, null=True)
 
     def __str__(self):
         return f"{self.name} / {self.client.name}"

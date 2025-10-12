@@ -1,58 +1,27 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
   <meta charset="UTF-8">
   <title>Login | Digital Twin Assistant</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-    }
-    .card {
-      background: #1e293b;
-      padding: 2rem;
-      border-radius: 12px;
-      width: 340px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-    }
-    h2 { text-align: center; color: #38bdf8; margin-bottom: 1rem; }
-    input {
-      width: 100%; padding: 10px;
-      margin: 8px 0;
-      border-radius: 8px;
-      border: 1px solid #334155;
-      background: #0f172a;
-      color: #f1f5f9;
-    }
-    button {
-      width: 100%;
-      background: #38bdf8;
-      color: #0f172a;
-      padding: 10px;
-      margin-top: 12px;
-      border: none;
-      border-radius: 8px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    button:hover { background: #0ea5e9; }
-    .error { color: #f87171; margin-top: 10px; min-height: 20px; }
-  </style>
+  <link rel="stylesheet" href="{% static 'css/login.css' %}">
 </head>
+
 <body>
-  <div class="card">
-    <h2>Entrar</h2>
-    <input id="username" placeholder="Usuário">
-    <input id="password" type="password" placeholder="Senha">
-    <button id="loginBtn">Acessar</button>
-    <div id="error" class="error"></div>
+  <div class="container">
+    <div class="logo">
+      <img src="{% static 'img/digital-twin-assist.png' %}" alt="Digital Twin Assistant">
+    </div>
+
+    <div class="card">
+      <h2>Login</h2>
+      <input id="username" placeholder="Usuário">
+      <input id="password" type="password" placeholder="Senha">
+      <button id="loginBtn">Acessar</button>
+      <div id="error" class="error"></div>
+    </div>
   </div>
 
   <script>
@@ -74,13 +43,12 @@
 
         localStorage.setItem("access", data.access);
         localStorage.setItem("refresh", data.refresh);
-
-        // redireciona após sucesso
-        window.location.href = "/viewer/"; // pode trocar por /dashboard/
+        window.location.href = "/viewer/";
       } catch (e) {
         error.textContent = e.message;
       }
     };
   </script>
 </body>
+
 </html>
