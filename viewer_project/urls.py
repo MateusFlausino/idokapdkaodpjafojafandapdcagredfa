@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("core.urls")),
+    path('', include('viewerapp.urls')),
 
     # Login page
     path("login/", core_views.login_page, name="login"),

@@ -5,7 +5,7 @@
 
   let charts = null;
 
-  function mkChart(ctx, label, unit){
+  function mkChart(ctx, label, unit) {
     return new Chart(ctx, {
       type: "line",
       data: { labels: [], datasets: [{ label: `${label} (${unit})`, data: [] }] },
@@ -22,19 +22,21 @@
     });
   }
 
-  function ensureCharts(){
+  function ensureCharts() {
     if (charts) return charts;
     charts = {
-      V:  mkChart(document.getElementById("chart-voltage"), "Tensão", "V"),
-      C:  mkChart(document.getElementById("chart-current"), "Corrente", "A"),
-      PA: mkChart(document.getElementById("chart-power"),   "Potência", "W")
+      V: mkChart(document.getElementById("chart-voltage"), "Tensão", "V"),
+      C: mkChart(document.getElementById("chart-current"), "Corrente", "A"),
+      PA: mkChart(document.getElementById("chart-power"), "Potência", "W")
     };
     return charts;
   }
 
-  async function carregarRelatorio(plantSlug){
+  async function carregarRelatorio(plantSlug) {
     try {
       const resp = await fetch(`/api/reports/${plantSlug}/`);
+      const url = `/api/reports/${plantSlug}/`;
+      const resp = await fetch(url);
       if (!resp.ok) {
         console.warn("Erro /api/reports:", resp.status);
         return;
