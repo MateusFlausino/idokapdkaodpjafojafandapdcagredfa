@@ -1,4 +1,6 @@
-// --- Auth guard (JWT) ---
+// =====================
+//  Auth guard (JWT)
+// =====================
 const access = localStorage.getItem("access");
 if (!access) { location.href = "/login/"; }
 
@@ -6,19 +8,22 @@ fetch("/api/me/", { headers: { Authorization: "Bearer " + access } })
   .then(r => r.json())
   .then(d => {
     const name = d.user || d.username || "Usuário";
-    document.getElementById("who").textContent = name;
+    const who = document.getElementById("who");
+    if (who) who.textContent = name;
   })
   .catch(() => {});
 
-document.getElementById("logout").onclick = () => {
-  localStorage.clear(); location.href = "/login/";
-};
+const btnLogout = document.getElementById("logout");
+if (btnLogout) {
+  btnLogout.onclick = () => { localStorage.clear(); location.href = "/login/"; };
+}
 
-// --- Helpers de tags e números ---
+// =====================
+//  Helpers / UI
+// =====================
 const tagClasses = ["tag-yellow", "tag-green", "tag-red", "tag-blue"];
 const tagForIndex = (i) => tagClasses[i % tagClasses.length];
-
-function toNum(x) { return Number(String(x ?? "").replace(",", ".")); }
+const toNum = (x) => Number(String(x ?? "").replace(",", "."));
 
 function renderTagsBadges(tags) {
   if (!Array.isArray(tags) || !tags.length) return "";
@@ -43,13 +48,18 @@ function plantTag(label, cls) {
   });
 }
 
-// --- Mapa Leaflet ---
+// =====================
+//  Leaflet map
+// =====================
 const map = L.map('map', { zoomControl: true }).setView([-23.55, -46.63], 10);
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  maxZoom: 19, attribution: '© OpenStreetMap'
-}).addTo(map);
+L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { maxZoom: 19, attribution: '© OpenStreetMap' }
+).addTo(map);
 
-// --- APS Viewer helpers ---
+// =====================
+//  APS Viewer helpers
+// =====================
 let _apsViewer = null;
 
 async function getApsToken() {
@@ -61,7 +71,8 @@ async function getApsToken() {
 
 async function openApsViewer(urn) {
   if (!urn) { alert("Esta planta não possui APS URN configurada."); return; }
-  document.getElementById("aps-overlay").style.display = "block";
+  const overlay = document.getElementById("aps-overlay");
+  if (overlay) overlay.style.display = "block";
 
   const opts = {
     env: "AutodeskProduction",
@@ -88,14 +99,22 @@ async function openApsViewer(urn) {
   });
 }
 
-document.getElementById("aps-close").onclick = () => {
-  document.getElementById("aps-overlay").style.display = "none";
-  if (_apsViewer && _apsViewer.model) { _apsViewer.unloadModel(_apsViewer.model); }
-};
+const apsClose = document.getElementById("aps-close");
+if (apsClose) {
+  apsClose.onclick = () => {
+    const overlay = document.getElementById("aps-overlay");
+    if (overlay) overlay.style.display = "none";
+    if (_apsViewer && _apsViewer.model) { _apsViewer.unloadModel(_apsViewer.model); }
+  };
+}
 
-// --- MQTT (render + polling) ---
+// =====================
+//  MQTT (render + polling)
+// =====================
 function renderMqttBox(payload) {
   const box = document.getElementById("mqtt-list");
+  if (!box) return;
+
   const values = payload?.values || {};
   const ts = payload?.ts || 0;
   const when = ts ? new Date(ts * 1000).toLocaleTimeString() : "—";
@@ -148,63 +167,114 @@ function startMqttPolling(plant) {
   window._mqttTimer = setInterval(tick, 2000);
 }
 
-// --- Render da planta (painel lateral) ---
+// =====================
+//  Painel da planta (direita)
+// =====================
 function renderPlantPanel(p, label) {
-  document.getElementById("p-title").textContent = label;
+  const title = document.getElementById("p-title");
+  const sub = document.getElementById("p-sub");
+  if (title) title.textContent = label;
+
   const clientTxt = (p.client_name || "Cliente");
   const apsTxt = " • APS URN: " + (p.aps_urn || "—");
   const tagsHtml = renderTagsBadges(p.tags);
-  document.getElementById("p-sub").innerHTML = clientTxt + apsTxt + tagsHtml;
+  if (sub) sub.innerHTML = clientTxt + apsTxt + tagsHtml;
 
-  document.getElementById("k-ativos").textContent = "—";
-  document.getElementById("k-sensores").textContent = "—";
-  document.getElementById("k-gw").textContent = "—";
+  const kAtivos = document.getElementById("k-ativos");
+  const kSens   = document.getElementById("k-sensores");
+  const kGw     = document.getElementById("k-gw");
+  if (kAtivos) kAtivos.textContent = "—";
+  if (kSens)   kSens.textContent   = "—";
+  if (kGw)     kGw.textContent     = "—";
 
-  document.getElementById("events-list").innerHTML = `
-    <div class="event"><span class="dot danger"></span><div><b>${label}</b>: Limite de vibração excedido.</div></div>
-    <div class="event"><span class="dot warn"></span><div><b>${label}</b>: Temperatura acima do ideal.</div></div>
-    <div class="event"><span class="dot ok"></span><div><b>${label}</b>: Inspeção concluída.</div></div>
-    <div style="padding:10px 0">
-      <button onclick="openApsViewer('${(p.aps_urn || "").replace(/'/g, "\\'")}')"
-              style="background:#38bdf8;color:#0f172a;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:700">
-        Abrir 3D no Viewer
-      </button>
-    </div>
-  `;
+  const events = document.getElementById("events-list");
+  if (events) {
+    events.innerHTML = `
+      <div class="event"><span class="dot danger"></span><div><b>${label}</b>: Limite de vibração excedido.</div></div>
+      <div class="event"><span class="dot warn"></span><div><b>${label}</b>: Temperatura acima do ideal.</div></div>
+      <div class="event"><span class="dot ok"></span><div><b>${label}</b>: Inspeção concluída.</div></div>
+      <div style="padding:10px 0">
+        <button onclick="openApsViewer('${(p.aps_urn || "").replace(/'/g, "\\'")}')"
+                style="background:#38bdf8;color:#0f172a;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:700">
+          Abrir 3D no Viewer
+        </button>
+      </div>
+    `;
+  }
 }
 
-// --- Alternância de painéis (direita) ---
+// =====================
+//  Alternância de painéis (direita)
+// =====================
 const paneDefault = document.getElementById("pane-default");
 const paneReports = document.getElementById("pane-relatorios");
 const btnReports  = document.getElementById("btn-relatorios");
 const btnBack     = document.getElementById("relatorios-voltar");
 
 function showDefaultPane() {
-  paneReports.classList.add("hidden");
-  paneDefault.classList.remove("hidden");
+  if (paneReports) paneReports.classList.add("hidden");
+  if (paneDefault) paneDefault.classList.remove("hidden");
 }
 function showReportsPane() {
-  paneDefault.classList.add("hidden");
-  paneReports.classList.remove("hidden");
+  if (paneDefault) paneDefault.classList.add("hidden");
+  if (paneReports) paneReports.classList.remove("hidden");
 }
 
-// Botão da barra lateral abre Relatórios (sem alerta; tenta usar slug e cai para id)
+// =====================
+//  Estado global da planta selecionada
+// =====================
+window.currentPlantSlug = null;
+window.currentPlantId   = null;
+window.currentPlantName = null;
+window._firstPlantCache = null;
+
+// Helper: chama loadReportForPlant quando reports.js estiver pronto
+function callReportsWhenReady(slugOrId, name, tries = 0) {
+  if (typeof window.loadReportForPlant === "function") {
+    window.loadReportForPlant(slugOrId, name);
+  } else {
+    if (tries > 20) { // ~3s com 150ms
+      console.warn("loadReportForPlant não disponível.");
+      return;
+    }
+    setTimeout(() => callReportsWhenReady(slugOrId, name, tries + 1), 150);
+  }
+}
+
+// Botão da barra lateral abre Relatórios
 if (btnReports) btnReports.addEventListener("click", () => {
+  // Se nenhuma planta foi selecionada ainda, usa a primeira válida carregada
+  if (!window.currentPlantId && window._firstPlantCache) {
+    const { p, label } = window._firstPlantCache;
+    renderPlantPanel(p, label);
+    startMqttPolling(p);
+    window.currentPlantSlug = p.slug || null;
+    window.currentPlantId   = p.id;
+    window.currentPlantName = p.name || label;
+    const el = document.getElementById("rel-plant-name");
+    if (el) el.textContent = window.currentPlantName;
+  }
+
   showReportsPane();
+
   const slug = window.currentPlantSlug;
   const name = window.currentPlantName;
   const id   = window.currentPlantId;
 
-  if (window.loadReportForPlant && (slug || id)) {
-    // a função de relatórios deve aceitar slug (prioritário) ou id (fallback)
-    window.loadReportForPlant(slug || id, name);
+  if (slug || id) {
+    // chama a função de relatórios (slug prioritário, id como fallback)
+    callReportsWhenReady(slug || id, name);
+  } else {
+    alert("Selecione uma planta no mapa primeiro.");
   }
 });
 
 // Botão Voltar
 if (btnBack) btnBack.addEventListener("click", showDefaultPane);
 
-// --- Carrega plantas e plota ---
+// =====================
+//  Carrega plantas e plota
+// =====================
 async function loadPlants() {
   const res = await fetch("/api/plants/", { headers: { Authorization: "Bearer " + access } });
   const items = await res.json();
@@ -232,8 +302,8 @@ async function loadPlants() {
         const el = document.getElementById("rel-plant-name");
         if (el) el.textContent = window.currentPlantName;
 
-        // já carrega dados do relatório (o painel abre quando clicar no botão)
-        if (window.loadReportForPlant) window.loadReportForPlant(p.slug || p.id, window.currentPlantName);
+        // pré-carrega dados (o painel abre quando clicar no botão)
+        callReportsWhenReady(p.slug || p.id, window.currentPlantName);
       });
 
       // primeira planta válida para seleção automática
@@ -241,6 +311,9 @@ async function loadPlants() {
       bounds.push([lat, lon]);
     }
   });
+
+  // guarda para fallback do botão
+  window._firstPlantCache = first || null;
 
   const FIT_MAX_ZOOM = 12;
   const SINGLE_ZOOM = 12;
@@ -259,7 +332,7 @@ async function loadPlants() {
     window.currentPlantName = p.name || label;
     const el = document.getElementById("rel-plant-name");
     if (el) el.textContent = window.currentPlantName;
-    if (window.loadReportForPlant) window.loadReportForPlant(p.slug || p.id, window.currentPlantName);
+    callReportsWhenReady(p.slug || p.id, window.currentPlantName);
   }
 }
 

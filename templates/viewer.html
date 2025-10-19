@@ -1,17 +1,14 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="pt-br">
-
 <head>
   <meta charset="UTF-8" />
   <title>Digital Twin | Viewer</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
 
   <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 
   <!-- APS Viewer -->
   <link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css" />
@@ -19,12 +16,22 @@
 
   <!-- Nosso CSS -->
   <link rel="stylesheet" href="{% static 'css/viewer.css' %}">
+  <!-- Fallbacks rápidos -->
+  <style>
+    .hidden{display:none}
+    /* garante que a coluna direita role e os gráficos tenham largura total */
+    section.right{overflow:auto}
+    #pane-relatorios canvas{display:block;width:100%;max-width:100%}
+  </style>
 </head>
 
 <body>
   <div class="shell">
     <header>
-      <div class="logo"><img src="{% static 'img/digital-twin-assist.png' %}">Digital Twin Assist</div>
+      <div class="logo">
+        <img src="{% static 'img/digital-twin-assist.png' %}" alt="Digital Twin Assist">
+        Digital Twin Assist
+      </div>
       <div class="search"><input id="q" placeholder="Buscar ativo ou sensor…" /></div>
       <div class="user" id="who">Carregando…</div>
     </header>
@@ -64,29 +71,30 @@
           <div class="muted" style="margin:10px 0 4px">Tempo real (MQTT)</div>
           <div id="mqtt-list" class="events"></div>
           <div id="events-list">
-            <div class="event"><span class="dot warn"></span>
-              <div>Sem eventos carregados (demo).</div>
-            </div>
+            <div class="event"><span class="dot warn"></span><div>Sem eventos carregados (demo).</div></div>
           </div>
         </div>
       </div>
 
-      <!-- PANE RELATÓRIOS (gráficos) -->
+      <!-- PANE RELATÓRIOS (gráficos em tempo real/histórico) -->
       <div id="pane-relatorios" class="hidden">
         <div class="r-head" style="display:flex;align-items:center;gap:10px">
           <span style="font-size:18px">📈</span>
           <h3 style="margin:0">Relatórios — Histórico MQTT</h3>
           <div style="flex:1"></div>
           <button id="relatorios-voltar"
-            style="background:#0ea5e9;color:#0f172a;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;font-weight:700">
+                  style="background:#0ea5e9;color:#0f172a;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;font-weight:700">
             Voltar
           </button>
         </div>
-        <div style="padding:8px 0 4px" class="muted">Planta: <b id="rel-plant-name">—</b></div>
+
+        <div class="muted" style="padding:8px 0 4px">
+          Planta: <b id="rel-plant-name">—</b>
+        </div>
 
         <canvas id="chart-voltage" height="120" style="margin-top:8px"></canvas>
         <canvas id="chart-current" height="120" style="margin-top:18px"></canvas>
-        <canvas id="chart-power" height="120" style="margin-top:18px"></canvas>
+        <canvas id="chart-power"   height="120" style="margin-top:18px"></canvas>
 
         <div id="rel-empty" class="muted" style="display:none;margin-top:10px">
           Sem dados para o período selecionado.
@@ -106,12 +114,10 @@
     </div>
   </div>
 
-
-  <!-- JS -->
-  <script src="{% static 'js/viewer.js' %}"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-  <script src="{% static 'js/reports.js' %}"></script>
+  <!-- JS (ordem importa) -->
+  <script src="{% static 'js/viewer.js' %}" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns" defer></script>
+  <script src="{% static 'js/reports.js' %}" defer></script>
 </body>
-
 </html>
