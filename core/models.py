@@ -66,5 +66,13 @@ class MqttConfig(models.Model):
     def __str__(self):
         return f"MQTT {self.plant.name}@{self.broker}:{self.port}"
   
+class Measurement(models.Model):
+    plant   = models.ForeignKey(Plant, on_delete=models.CASCADE)
+    metric  = models.CharField(max_length=10)  # ex: V, C, PA
+    value   = models.FloatField()
+    ts      = models.DateTimeField(db_index=True)
 
+    class Meta:
+        indexes = [models.Index(fields=["plant", "metric", "ts"])]
+        ordering = ["-ts"]
 

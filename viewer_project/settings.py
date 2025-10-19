@@ -26,6 +26,7 @@ INSTALLED_APPS = [
 STATIC_URL = 'static/'
 # Se usar a pasta global "static/" na raiz do projeto:
 STATICFILES_DIRS = [ BASE_DIR / "static" ]
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',

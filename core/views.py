@@ -2,9 +2,11 @@ from rest_framework import viewsets, permissions, decorators, response
 from django.contrib.auth.models import User
 from django.shortcuts import render
 
-from .models import Client, Plant
+from .models import Client, Plant, Measurement
 from .serializers import ClientSerializer, PlantSerializer, MeSerializer
 from .permissions import IsAdmin, IsAdminOrReadOwnClient
+from django.http import JsonResponse
+from django.utils.dateparse import parse_datetime
 
 class ClientViewSet(viewsets.ModelViewSet):
     """
@@ -59,6 +61,29 @@ class PlantViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save()
+
+def reports(request, plant_slug):
+    metric = request.GET.get("metric")  # opcional: "V", "C", "PA"
+    start  = parse_datetime(request.GET.get("start"))
+    end    = parse_datetime(request.GET.get("end"))
+
+    plant = Plant.objects.get(slug=plant_slug)
+    qs = Measurement.objects.filter(plant=plant)
+    if metric:
+        qs = qs.filter(metric=metric)
+    if start:
+        qs = qs.filter(ts__gte=start)
+    if end:
+        qs = qs.filter(ts__lte=end)
+
+    qs = qs.order_by("ts").values("ts", "metric", "value")
+
+    data = {}
+    for row in qs:
+        m = row["metric"]
+        data.setdefault(m, []).append([row["ts"].isoformat(), row["value"]])
+
+    return JsonResponse(data)
 
 @decorators.api_view(["GET"])
 def me(request):
