@@ -8,21 +8,22 @@
   const lblPlant = document.getElementById("rel-plant-name");
   const emptyMsg = document.getElementById("rel-empty");
 
-  let charts = null;
-  let timer = null;
+  let charts = null;       // instância Chart.js (uma vez)
+  let timer = null;       // intervalo do pooling
+  let currentKey = null;   // slug ou id da planta atualmente exibida
   const MAX_POINTS = 240; // ~8 minutos a 2s
 
-  function log(...a){ console.log("[reports]", ...a); }
-  function warn(...a){ console.warn("[reports]", ...a); }
+  function log(...a) { console.log("[reports]", ...a); }
+  function warn(...a) { console.warn("[reports]", ...a); }
 
-  function requireCanvas(id){
+  function requireCanvas(id) {
     const el = document.getElementById(id);
     if (!el) warn(`Canvas #${id} não encontrado`);
     return el;
   }
 
-  function mkChart(ctx, label, unit){
-    if (!window.Chart){
+  function mkChart(ctx, label, unit) {
+    if (!window.Chart) {
       warn("Chart.js não carregado. Confira a ordem dos scripts no viewer.html.");
       return null;
     }
@@ -42,17 +43,17 @@
     });
   }
 
-  function ensureCharts(){
-    if (charts) return charts;
+  function ensureCharts() {
+    if (charts) return;
 
-    const cV  = requireCanvas("chart-voltage");
-    const cC  = requireCanvas("chart-current");
+    const cV = requireCanvas("chart-voltage");
+    const cC = requireCanvas("chart-current");
     const cPA = requireCanvas("chart-power");
 
     charts = {
-      tensao:   mkChart(cV,  "Tensão",          "V"),
-      corrente: mkChart(cC,  "Corrente",        "A"),
-      potencia: mkChart(cPA, "Potência Ativa",  "W"),
+      tensao: mkChart(cV, "Tensão", "V"),
+      corrente: mkChart(cC, "Corrente", "A"),
+      potencia: mkChart(cPA, "Potência Ativa", "W"),
     };
 
     // força um primeiro resize (canvas recém-visualizado)
@@ -63,7 +64,7 @@
     return charts;
   }
 
-  function resetCharts(){
+  function resetCharts() {
     if (!charts) return;
     Object.values(charts).forEach(ch => {
       if (!ch) return;
@@ -73,7 +74,7 @@
     });
   }
 
-  function pushPoint(chart, x, y){
+  function pushPoint(chart, x, y) {
     if (!chart) return;
     chart.data.labels.push(x);
     chart.data.datasets[0].data.push(y);
@@ -84,10 +85,19 @@
     chart.update();
   }
 
-  function firstNum(obj, keys){
-    for (const k of keys){
-      for (const kk of Object.keys(obj)){
-        if (kk.toLowerCase() === String(k).toLowerCase()){
+  // Helpers públicos para o viewer.js controlar o pooling sem perder dados
+  window.pauseReport = () => { if (timer) { clearInterval(timer); timer = null; } };
+  window.resumeReport = () => {
+    if (!currentKey || timer) return;
+    const pid = /^\d+$/.test(String(currentKey)) ? Number(currentKey) : null;
+    tick(pid);
+    timer = setInterval(() => tick(pid), 2000);
+  };
+
+  function firstNum(obj, keys) {
+    for (const k of keys) {
+      for (const kk of Object.keys(obj)) {
+        if (kk.toLowerCase() === String(k).toLowerCase()) {
           const n = Number(obj[kk]);
           if (!Number.isNaN(n)) return n;
         }
@@ -96,7 +106,7 @@
     return NaN;
   }
 
-  async function tick(plantId){
+  async function tick(plantId) {
     const access = localStorage.getItem('access');
     if (!access || !plantId) { warn("Sem access token ou plantId"); return; }
 
@@ -104,7 +114,7 @@
       const r = await fetch(`/api/plants/${plantId}/mqtt/latest/`, {
         headers: { Authorization: `Bearer ${access}` }
       });
-      if (!r.ok){
+      if (!r.ok) {
         warn("HTTP", r.status, "em /mqtt/latest/");
         return;
       }
@@ -113,13 +123,13 @@
       const now = data?.ts ? new Date(data.ts * 1000) : new Date();
       const values = data?.values || {};
 
-      const v  = firstNum(values, ["V","tensao","Tensão"]);
-      const c  = firstNum(values, ["C","corrente","Corrente"]);
-      const pa = firstNum(values, ["PA","potencia","Potência Ativa","Potência"]);
+      const v = firstNum(values, ["V", "tensao", "Tensão"]);
+      const c = firstNum(values, ["C", "corrente", "Corrente"]);
+      const pa = firstNum(values, ["PA", "potencia", "Potência Ativa", "Potência"]);
 
       let any = false;
-      if (isFinite(v))  { pushPoint(charts.tensao,   now, v);  any = true; }
-      if (isFinite(c))  { pushPoint(charts.corrente, now, c);  any = true; }
+      if (isFinite(v)) { pushPoint(charts.tensao, now, v); any = true; }
+      if (isFinite(c)) { pushPoint(charts.corrente, now, c); any = true; }
       if (isFinite(pa)) { pushPoint(charts.potencia, now, pa); any = true; }
 
       if (emptyMsg) emptyMsg.style.display = any ? "none" : "block";
@@ -128,23 +138,19 @@
     }
   }
 
-  // === API global chamada pelo viewer.js ===
-  window.loadReportForPlant = (slugOrId, plantName) => {
-    if (lblPlant && plantName) lblPlant.textContent = plantName;
+  window.loadReportForPlant = (key) => {
+    const pid = /^\d+$/.test(String(key)) ? Number(key) : null;
+    ensureCharts();
 
-    const pid = window.currentPlantId || (Number.isInteger(slugOrId) ? slugOrId : null);
-    if (!pid){
-      warn("Sem plantId; clique no marcador da planta.");
-      if (emptyMsg) emptyMsg.style.display = "block";
-      return;
+    // 🚫 NÃO reseta se a planta for a mesma
+    if (currentKey !== key) {
+      resetCharts();
+      currentKey = key;
     }
 
-    ensureCharts();
-    resetCharts();
-
-    // exibe “aguardando dados” até chegar algo
     if (emptyMsg) emptyMsg.style.display = "block";
 
+    // reinicia pooling
     if (timer) clearInterval(timer);
     tick(pid);
     timer = setInterval(() => tick(pid), 2000);
