@@ -67,13 +67,15 @@ class MqttConfig(models.Model):
     def __str__(self):
         return f"MQTT {self.plant.name}@{self.broker}:{self.port}"
   
+# core/models.py
 class Measurement(models.Model):
-    plant   = models.ForeignKey(Plant, on_delete=models.CASCADE)
-    metric  = models.CharField(max_length=10)  # ex: V, C, PA
-    value   = models.FloatField()
-    ts      = models.DateTimeField(db_index=True)
+    plant = models.ForeignKey('Plant', on_delete=models.CASCADE, related_name='measurement')
+    ts = models.DateTimeField(db_index=True)
+    metric = models.CharField(max_length=16, db_index=True)   # ex.: "V", "C", "PA"
+    value = models.FloatField()
 
     class Meta:
-        indexes = [models.Index(fields=["plant", "metric", "ts"])]
-        ordering = ["-ts"]
+        indexes = [
+            models.Index(fields=['plant','metric','ts']),
+        ]
 
