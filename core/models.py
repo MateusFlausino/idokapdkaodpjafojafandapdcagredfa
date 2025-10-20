@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils.text import slugify
 
 class Client(models.Model):
     name = models.CharField(max_length=150)
@@ -45,7 +46,7 @@ class Plant(models.Model):
     address = models.CharField(max_length=255, blank=True, default="")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    slug = models.SlugField(unique=True, null=True, blank=True)
     def __str__(self):
         return f"{self.name} / {self.client.name}"
 

@@ -14,6 +14,6 @@ urlpatterns = [
     path("aps/token/", views_aps.aps_token, name="aps-token"),
 
     # ✅ sem "api/" aqui (o prefixo vem do include na raiz)
-    path("reports/<slug:plant_slug>/", views_reports.reports, name="reports"),
-    path("reports/by-id/<int:plant_id>/", views_reports.reports_by_id, name="reports-by-id"),
+    path("reports/<slug:plant_slug>/", views_reports.reports, name="reports"),  # mantém
+    path("reports/<int:plant_id>/", views_reports.reports_by_id, name="reports-id"),  # aceita id direto
 ]

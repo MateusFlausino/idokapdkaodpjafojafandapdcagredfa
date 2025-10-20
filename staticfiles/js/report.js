@@ -25,9 +25,13 @@
     PA: mkChart(document.getElementById("chart-power"), "Potência", "W"),
   };
 
-  async function carregarRelatorio(plantSlug) {
+  async function carregarRelatorio(plantKey) {
     try {
-      const resp = await fetch(`/api/reports/${plantSlug}/`);
+      const isId = /^\d+$/.test(String(plantKey));
+      const url = isId
+        ? `/api/reports/by-id/${plantKey}/`
+        : `/api/reports/${plantKey}/`;
+      const resp = await fetch(url);
       if (!resp.ok) return console.warn("Erro ao buscar relatório:", resp.status);
       const data = await resp.json();
 
@@ -43,9 +47,9 @@
     }
   }
 
-  window.loadReportForPlant = (slug) => {
-    carregarRelatorio(slug);
+  window.loadReportForPlant = (slugOrId) => {
+    carregarRelatorio(slugOrId)
     clearInterval(window._reportTimer);
-    window._reportTimer = setInterval(() => carregarRelatorio(slug), 30000);
+    window._reportTimer = setInterval(() => carregarRelatorio(slugOrId), 30000);
   };
 })();
