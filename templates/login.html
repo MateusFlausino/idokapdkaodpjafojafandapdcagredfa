@@ -1,0 +1,54 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Login | Digital Twin Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{% static 'css/login.css' %}">
+</head>
+
+<body>
+  <div class="container">
+    <div class="logo">
+      <img src="{% static 'img/digital-twin-assist.png' %}" alt="Digital Twin Assistant">
+    </div>
+
+    <div class="card">
+      <h2>Login</h2>
+      <input id="username" placeholder="Usuário">
+      <input id="password" type="password" placeholder="Senha">
+      <button id="loginBtn">Acessar</button>
+      <div id="error" class="error"></div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("loginBtn").onclick = async () => {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+      const error = document.getElementById("error");
+      error.textContent = "";
+
+      try {
+        const res = await fetch("/api/auth/token/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Usuário ou senha incorretos");
+
+        localStorage.setItem("access", data.access);
+        localStorage.setItem("refresh", data.refresh);
+        window.location.href = "/viewer/";
+      } catch (e) {
+        error.textContent = e.message;
+      }
+    };
+  </script>
+</body>
+
+</html>

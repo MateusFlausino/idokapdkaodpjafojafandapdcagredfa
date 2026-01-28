@@ -1,0 +1,136 @@
+from django.db import models
+from django.contrib.auth.models import User
+from django.db import models
+from django.utils.text import slugify
+
+class Client(models.Model):
+    name = models.CharField(max_length=150)
+    slug = models.SlugField(max_length=160, unique=True)
+    notes = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+ROLE_CHOICES = (
+    ("ADMIN", "Admin"),
+    ("CLIENT", "ClientUser"),
+)
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default="CLIENT")
+    # Se for usuário do cliente, amarramos aqui:
+    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user.username} ({self.role})"
+
+# --- NOVO: modelo de Tag
+class Tag(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    color = models.CharField(max_length=7, default="#0ea5e9")  # hex, ex: #FF0000
+    icon = models.CharField(max_length=50, blank=True, default="")  # opcional
+    def __str__(self):
+        return self.name
+
+    
+class Plant(models.Model):
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="plants")
+    name = models.CharField(max_length=150)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    tags = models.ManyToManyField('Tag', blank=True, related_name='plants')
+    aps_urn = models.CharField(max_length=255, blank=True, null=True)
+    address = models.CharField(max_length=255, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    slug = models.SlugField(unique=True, null=True, blank=True)
+    def __str__(self):
+        return f"{self.name} / {self.client.name}"
+
+
+class MqttConfig(models.Model):
+    """
+    Configuração MQTT por planta.
+    topics: lista de objetos { "topic": "tele/.../ENERGY/V", "label": "Tensão" }
+    """
+    plant = models.OneToOneField(Plant, on_delete=models.CASCADE, related_name="mqtt")
+    broker = models.CharField(max_length=255, help_text="ex: 74.63.254.231")
+    port = models.IntegerField(default=1883)
+    username = models.CharField(max_length=128, blank=True, null=True)
+    password = models.CharField(max_length=128, blank=True, null=True)
+    client_id = models.CharField(max_length=64, blank=True, null=True)
+    topics = models.JSONField(default=list, help_text="[{topic,label}, ...]")
+    
+    def __str__(self):
+        return f"MQTT {self.plant.name}@{self.broker}:{self.port}"
+  
+# core/models.py
+class Measurement(models.Model):
+    plant = models.ForeignKey('Plant', on_delete=models.CASCADE, related_name='measurement')
+    ts = models.DateTimeField(db_index=True)
+    metric = models.CharField(max_length=16, db_index=True)   # ex.: "V", "C", "PA"
+    value = models.FloatField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['plant','metric','ts']),
+        ]
+
+class PlantIcon(models.Model):
+    # Se sua Plant estiver neste mesmo arquivo com nome "Plant", a string funciona.
+    # Se o nome for outro (ex.: "Site" ou "Factory"), troque abaixo por esse nome.
+    plant = models.ForeignKey("Plant", on_delete=models.CASCADE, related_name="icons")
+
+    dbid = models.PositiveIntegerField("dbId (Viewer)", help_text="dbId do elemento no APS Viewer")
+
+    # Forma 1: buscará em payload.values[key]
+    key = models.CharField(
+        "Chave em payload.values",
+        max_length=120,
+        blank=True,
+        help_text='Ex.: ENERGY.Power (opcional se usar tópico + campo)'
+    )
+
+    # Forma 2: buscará em payload.topics[topic][field_path]
+    topic = models.CharField(
+        "Tópico MQTT",
+        max_length=200,
+        blank=True,
+        help_text='Ex.: tele/xisto_A399CE/SENSOR (opcional se usar apenas "key")'
+    )
+    field_path = models.CharField(
+        "Campo dentro do payload",
+        max_length=200,
+        blank=True,
+        help_text='Ex.: ENERGY.Power (usado junto com "Tópico MQTT")'
+    )
+
+    label_template = models.CharField(
+        "Template do rótulo",
+        max_length=120,
+        default="{value}",
+        help_text="Use {value} para o valor (ex.: {value} W, {value}&#176;C)"
+    )
+    css = models.CharField(
+        "Classe CSS do ícone",
+        max_length=120,
+        default="fas fa-map-marker-alt",
+        help_text='Ex.: fas fa-bolt, fas fa-thermometer-half (Font Awesome)'
+    )
+
+    sort_order = models.IntegerField("Ordem", default=0)
+    is_active = models.BooleanField("Ativo", default=True)
+
+    class Meta:
+        ordering = ["plant", "sort_order", "id"]
+
+    def __str__(self):
+        base = f"{self.plant} • dbId={self.dbid}"
+        if self.topic and self.field_path:
+            return f"{base} • {self.topic} → {self.field_path}"
+        if self.key:
+            return f"{base} • values.{self.key}"
+        return base

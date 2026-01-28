@@ -1,0 +1,165 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Digital Twin | Viewer</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- APS Viewer -->
+  <link rel="stylesheet" href="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css" />
+  <script src="https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+
+  <!-- Font Awesome (para os ícones prontos; pode usar outra lib CSS se preferir) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/all.min.css" />
+
+  <!-- IconMarkupExtension (CDN jsDelivr, compatível com Viewer v7) -->
+  <link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/gh/autodesk-forge/forge-extensions/public/extensions/IconMarkupExtension/contents/main.css">
+  <script
+    src="https://cdn.jsdelivr.net/gh/autodesk-forge/forge-extensions/public/extensions/IconMarkupExtension/contents/main.js"></script>
+
+  <!-- Nosso CSS -->
+  <link rel="stylesheet" href="{% static 'css/viewer.css' %}">
+  <!-- Fallbacks rápidos -->
+  <style>
+    .hidden {
+      display: none
+    }
+
+    /* garante que a coluna direita role e os gráficos tenham largura total */
+    section.right {
+      overflow: auto
+    }
+
+    #pane-relatorios canvas {
+      display: block;
+      width: 100%;
+      max-width: 100%
+    }
+
+      /* Opcional: ajuste de tamanho/cor dos ícones/labels */
+  .iconMarkup .fa-thermometer-full    { font-size: 18px; }
+  .iconMarkup .fa-exclamation-triangle { font-size: 18px; }
+
+  /* Exemplo de “badge” do valor junto ao ícone */
+  .iconMarkup .forgeIcon > .label {
+    background: rgba(0,0,0,0.75);
+    color: #fff;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  
+  </style>
+</head>
+
+<body>
+  <div class="shell">
+    <header>
+      <div class="logo">
+        <img src="{% static 'img/digital-twin-assist.png' %}" alt="Digital Twin Assist">
+        Digital Twin Assist
+      </div>
+      <div class="search"><input id="q" placeholder="Buscar ativo ou sensor…" /></div>
+      <div class="user" id="who">Carregando…</div>
+    </header>
+
+    <!-- BARRA LATERAL -->
+    <aside>
+      <div class="sicon active" title="Mapa">🗺️</div>
+      <div class="sicon" title="Eventos">🔔</div>
+
+      <!-- RELATÓRIOS -->
+      <div class="sicon" id="btn-relatorios" title="Relatórios">📊</div>
+
+      <div class="sicon" title="KPI">🏷️</div>
+      <div class="sicon" title="Sair" id="logout">⎋</div>
+    </aside>
+
+    <section class="center">
+      <div id="map"></div>
+    </section>
+
+    <section class="right">
+      <!-- PANE PADRÃO (eventos/MQTT) -->
+      <div id="pane-default">
+        <div class="r-head">
+          <h3 id="p-title">Selecione uma planta no mapa</h3>
+          <div class="muted" id="p-sub">Cliente • Setor • Planta</div>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><small>Ativos</small><b id="k-ativos">—</b></div>
+          <div class="stat"><small>Sensores</small><b id="k-sensores">—</b></div>
+          <div class="stat"><small>Gateways</small><b id="k-gw">—</b></div>
+        </div>
+
+        <div class="events">
+          <div class="muted" style="margin:6px 0 4px">Eventos recentes</div>
+          <div class="muted" style="margin:10px 0 4px">Medições</div>
+          <div id="mqtt-list" class="events"></div>
+          <div id="events-list">
+            <div class="event"><span class="dot warn"></span>
+              <div>Sem eventos carregados (demo).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANE RELATÓRIOS (gráficos em tempo real/histórico) -->
+      <div id="pane-relatorios" class="hidden">
+        <div class="r-head" style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px">📈</span>
+          <h3 style="margin:0">Relatórios — Histórico</h3>
+          <div style="flex:1"></div>
+          <button id="relatorios-voltar"
+            style="background:#0ea5e9;color:#0f172a;border:none;padding:6px 10px;border-radius:8px;cursor:pointer;font-weight:700">
+            Voltar
+          </button>
+        </div>
+
+        <div class="muted" style="padding:8px 0 4px">
+          Planta: <b id="rel-plant-name">—</b>
+        </div>
+
+        <canvas id="chart-voltage" height="120" style="margin-top:8px"></canvas>
+        <canvas id="chart-current" height="120" style="margin-top:18px"></canvas>
+        <canvas id="chart-power" height="120" style="margin-top:18px"></canvas>
+
+        <div id="rel-empty" class="muted" style="display:none;margin-top:10px">
+          Sem dados para o período selecionado.
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Overlay do APS Viewer -->
+  <div id="aps-overlay">
+    <div id="aps-wrap">
+      <div id="aps-top">
+        <strong>Viewer</strong>
+        <button id="aps-close">Fechar</button>
+      </div>
+      <div id="aps-viewer"></div>
+    </div>
+  </div>
+
+  <!-- JS (ordem importa) -->
+  <script src="{% static 'js/viewer.js' %}" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns" defer></script>
+  <script src="{% static 'js/report.js' %}" defer></script>
+  <!-- b) NOVO: bridge que integra painel e mantém histórico -->
+  <script src="{% static 'js/reports_integration.js' %}" defer></script>
+</body>
+
+</html>
